@@ -387,7 +387,7 @@ class TopstepXNotionTrader {
 
     // HTMLで確認したdata-field名に基づいて値を抽出
     const tradeId = getCellValue('id');
-    const symbolName = getCellValue('symbolName') || getCellValue('symbol');
+    const symbolName = getCellValue('symbolName').replace(/\//g, '') || getCellValue('symbol').replace(/\//g, '');
     const positionSize = getCellValue('positionSize') || getCellValue('size') || getCellValue('qty');
     const entryTime = getCellValue('entryTime') || getCellValue('entryTimestamp');
     const exitedAt = getCellValue('exitedAt') || getCellValue('exitTime') || getCellValue('exitTimestamp');
