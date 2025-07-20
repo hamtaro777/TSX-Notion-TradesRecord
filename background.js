@@ -119,14 +119,32 @@ class NotionAPI {
   buildNotionPageData(trade) {
     const properties = {};
 
-    // 基本的なプロパティを設定（実際のHTML data-field名に基づく）
-    if (trade.symbolName) {
-      properties['Symbol'] = {
+    // Trade IDをタイトルに変更（必須項目）
+    if (trade.tradeId) {
+      properties['Trade ID'] = {
         title: [{
           text: {
-            content: trade.symbolName
+            content: trade.tradeId.toString()
           }
         }]
+      };
+    } else {
+      // tradeIdがない場合は生成されたIDを使用
+      properties['Trade ID'] = {
+        title: [{
+          text: {
+            content: trade.id || 'Unknown'
+          }
+        }]
+      };
+    }
+
+    // Symbolをセレクトに変更
+    if (trade.symbolName) {
+      properties['Symbol'] = {
+        select: {
+          name: trade.symbolName
+        }
       };
     }
 
@@ -209,17 +227,6 @@ class NotionAPI {
         rich_text: [{
           text: {
             content: trade.tradeDurationDisplay
-          }
-        }]
-      };
-    }
-
-    // トレードID（TopstepXのID）
-    if (trade.tradeId) {
-      properties['Trade ID'] = {
-        rich_text: [{
-          text: {
-            content: trade.tradeId.toString()
           }
         }]
       };
