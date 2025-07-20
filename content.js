@@ -1,4 +1,4 @@
-// TopstepX Notion Trader - Content Script
+// TopstepX Notion Trader - Content Script (Debug Enhanced)
 class TopstepXNotionTrader {
   constructor() {
     this.settings = {};
@@ -95,10 +95,12 @@ class TopstepXNotionTrader {
 
   async handleManualSync() {
     try {
-      console.log('Manual sync started');
+      console.log('=== Manual sync started ===');
+      console.log('Current URL:', window.location.href);
       console.log('Current settings:', this.settings);
       console.log('isEnabled:', this.isEnabled);
       
+      // 設定の詳細チェック
       if (!this.isEnabled) {
         const missingSettings = [];
         if (!this.settings.notionToken) missingSettings.push('Notion Token');
@@ -114,35 +116,85 @@ class TopstepXNotionTrader {
         };
       }
 
+      // ページの確認
+      console.log('Checking page structure...');
+      const tradesTab = this.findTradesTab();
+      console.log('Trades tab found:', !!tradesTab);
+      
+      if (!tradesTab) {
+        console.error('Trades tab not found. Available panels:', 
+          document.querySelectorAll('[role="tabpanel"]').length);
+        
+        return {
+          success: false,
+          error: 'Tradesタブが見つかりません。Tradesタブを開いてから再実行してください。'
+        };
+      }
+
+      // トレードデータの抽出
+      console.log('Extracting trades...');
       const trades = this.extractTradesFromPage();
-      console.log('Extracted trades:', trades);
+      console.log('Extracted trades:', trades.length, trades);
+      
+      if (trades.length === 0) {
+        console.log('No trades found on page');
+        return { 
+          success: true, 
+          count: 0, 
+          message: 'ページにトレードデータが見つかりません。トレードがあることを確認してください。' 
+        };
+      }
       
       const newTrades = trades.filter(trade => !this.processedTrades.has(trade.id));
-      console.log('New trades to sync:', newTrades);
+      console.log('New trades to sync:', newTrades.length, newTrades);
       
       if (newTrades.length === 0) {
         return { 
           success: true, 
           count: 0, 
-          message: '新しいトレードはありません' 
+          message: '新しいトレードはありません（既に同期済み）' 
         };
       }
 
+      // 各トレードをNotionに送信
       let successCount = 0;
+      let errorDetails = [];
+      
       for (const trade of newTrades) {
         console.log('Sending trade to Notion:', trade);
-        const success = await this.sendToNotion(trade);
-        if (success) {
-          this.processedTrades.add(trade.id);
-          successCount++;
-          console.log(`Trade ${trade.id} sent successfully`);
-        } else {
-          console.error(`Failed to send trade ${trade.id}`);
+        try {
+          const success = await this.sendToNotion(trade);
+          if (success) {
+            this.processedTrades.add(trade.id);
+            successCount++;
+            console.log(`Trade ${trade.id} sent successfully`);
+          } else {
+            const errorMsg = `Trade ${trade.id} failed to send`;
+            console.error(errorMsg);
+            errorDetails.push(errorMsg);
+          }
+        } catch (error) {
+          const errorMsg = `Trade ${trade.id} error: ${error.message}`;
+          console.error(errorMsg);
+          errorDetails.push(errorMsg);
         }
       }
 
       // 統計を更新
-      await this.updateStats(successCount);
+      if (successCount > 0) {
+        await this.updateStats(successCount);
+      }
+
+      console.log('=== Manual sync completed ===');
+      console.log('Success count:', successCount);
+      console.log('Error details:', errorDetails);
+
+      if (errorDetails.length > 0) {
+        return {
+          success: false,
+          error: `一部のトレードで同期に失敗しました。成功: ${successCount}件, 失敗: ${errorDetails.length}件`
+        };
+      }
 
       return { 
         success: true, 
@@ -150,6 +202,7 @@ class TopstepXNotionTrader {
       };
     } catch (error) {
       console.error('Manual sync error:', error);
+      console.error('Error stack:', error.stack);
       return { 
         success: false, 
         error: `同期エラー: ${error.message}` 
@@ -196,12 +249,18 @@ class TopstepXNotionTrader {
   }
 
   findTradesTab() {
-    // Tradesタブパネルを特定
-    const panels = document.querySelectorAll('[role="tabpanel"]');
+    console.log('Searching for trades tab...');
     
-    for (const panel of panels) {
+    // Method 1: role="tabpanel"で探す
+    const panels = document.querySelectorAll('[role="tabpanel"]');
+    console.log('Found tabpanels:', panels.length);
+    
+    for (let i = 0; i < panels.length; i++) {
+      const panel = panels[i];
       const headers = panel.querySelectorAll('.MuiDataGrid-columnHeaderTitle');
       const headerTexts = Array.from(headers).map(h => h.textContent);
+      
+      console.log(`Panel ${i} headers:`, headerTexts);
       
       // Tradesタブの特徴的なヘッダーを探す
       if (headerTexts.some(text => 
@@ -211,10 +270,35 @@ class TopstepXNotionTrader {
         text.includes('PnL') ||
         text.includes('Qty')
       )) {
+        console.log('Found trades tab at panel', i);
         return panel;
       }
     }
     
+    // Method 2: MuiDataGridを直接探す
+    const dataGrids = document.querySelectorAll('.MuiDataGrid-root');
+    console.log('Found MuiDataGrid elements:', dataGrids.length);
+    
+    for (let i = 0; i < dataGrids.length; i++) {
+      const grid = dataGrids[i];
+      const headers = grid.querySelectorAll('.MuiDataGrid-columnHeaderTitle');
+      const headerTexts = Array.from(headers).map(h => h.textContent);
+      
+      console.log(`DataGrid ${i} headers:`, headerTexts);
+      
+      if (headerTexts.some(text => 
+        text.includes('Symbol') || 
+        text.includes('Entry') || 
+        text.includes('Exit') ||
+        text.includes('PnL') ||
+        text.includes('Qty')
+      )) {
+        console.log('Found trades grid at index', i);
+        return grid;
+      }
+    }
+    
+    console.log('Trades tab/grid not found');
     return null;
   }
 
@@ -248,32 +332,66 @@ class TopstepXNotionTrader {
     const tradesTab = this.findTradesTab();
     
     if (!tradesTab) {
-      console.log('Trades tab not found');
+      console.log('Trades tab not found for extraction');
       return trades;
     }
 
-    const dataRows = tradesTab.querySelectorAll('.MuiDataGrid-virtualScrollerRenderZone .MuiDataGrid-row[data-id]');
+    console.log('Extracting trades from tab...');
     
-    dataRows.forEach((row, index) => {
-      try {
-        const trade = this.extractTradeFromRow(row);
-        if (trade && trade.symbol) {
-          trades.push(trade);
+    // データ行を探す
+    const dataRows = tradesTab.querySelectorAll('.MuiDataGrid-virtualScrollerRenderZone .MuiDataGrid-row[data-id]');
+    console.log('Found data rows:', dataRows.length);
+    
+    // 行が見つからない場合、別の方法を試す
+    if (dataRows.length === 0) {
+      const alternativeRows = tradesTab.querySelectorAll('.MuiDataGrid-row');
+      console.log('Alternative rows found:', alternativeRows.length);
+      
+      alternativeRows.forEach((row, index) => {
+        try {
+          const trade = this.extractTradeFromRow(row);
+          if (trade && trade.symbol) {
+            trades.push(trade);
+            console.log(`Extracted trade ${index}:`, trade);
+          }
+        } catch (error) {
+          console.error('Error extracting trade from alternative row:', error);
         }
-      } catch (error) {
-        console.error('Error extracting trade from row:', error);
-      }
-    });
+      });
+    } else {
+      dataRows.forEach((row, index) => {
+        try {
+          const trade = this.extractTradeFromRow(row);
+          if (trade && trade.symbol) {
+            trades.push(trade);
+            console.log(`Extracted trade ${index}:`, trade);
+          }
+        } catch (error) {
+          console.error('Error extracting trade from row:', error);
+        }
+      });
+    }
 
     console.log(`Extracted ${trades.length} trades from page`);
     return trades;
   }
 
   extractTradeFromRow(row) {
+    console.log('Extracting trade from row:', row);
+    
     const getCellValue = (fieldName) => {
       const cell = row.querySelector(`[data-field="${fieldName}"]`);
-      return cell ? cell.textContent.trim() : '';
+      const value = cell ? cell.textContent.trim() : '';
+      console.log(`Field ${fieldName}: "${value}"`);
+      return value;
     };
+
+    // すべてのセルを出力してデバッグ
+    const cells = row.querySelectorAll('[data-field]');
+    console.log('All cells in row:');
+    cells.forEach(cell => {
+      console.log(`  ${cell.getAttribute('data-field')}: "${cell.textContent.trim()}"`);
+    });
 
     // HTMLで確認したdata-field名に基づいて値を抽出
     const tradeId = getCellValue('id');
@@ -292,7 +410,7 @@ class TopstepXNotionTrader {
     // ユニークIDを生成（TopstepXのIDがある場合はそれを使用）
     const id = tradeId || this.generateTradeId(symbolName, entryTime, entryPrice, positionSize);
 
-    return {
+    const trade = {
       id,
       tradeId: tradeId,
       symbolName: symbolName,
@@ -311,6 +429,9 @@ class TopstepXNotionTrader {
       type: direction, // directionをtypeとしても保持
       extractedAt: new Date().toISOString()
     };
+
+    console.log('Extracted trade:', trade);
+    return trade;
   }
 
   generateTradeId(symbolName, entryTime, entryPrice, positionSize) {
