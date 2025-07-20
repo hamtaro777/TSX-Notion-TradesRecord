@@ -27,7 +27,8 @@ TopstepXのトレードデータをNotionデータベースに自動同期する
 
    | プロパティ名 | タイプ | 説明 |
    |-------------|--------|------|
-   | Symbol | タイトル | トレードシンボル |
+   | Trade ID | タイトル | トレードID |
+   | Symbol | セレクト | トレードシンボル |
    | Direction | セレクト | Long/Short |
    | Size | 数値 | 取引数量 |
    | Entry Price | 数値 | エントリー価格 |
@@ -38,9 +39,7 @@ TopstepXのトレードデータをNotionデータベースに自動同期する
    | Entry Time | 日付 | エントリー日時 |
    | Exit Time | 日付 | エグジット日時 |
    | Duration | テキスト | トレード期間 |
-   | Trade ID | テキスト | トレードID |
    | Extracted At | 日付 | データ取得時刻 |
-   | Platform | セレクト | プラットフォーム名 |
    | Result | セレクト | Win/Loss/Breakeven |
 
 3. **データベースの共有**
@@ -96,6 +95,7 @@ TopstepXのトレードデータをNotionデータベースに自動同期する
 
 | TopstepX | Notion | 説明 |
 |----------|--------|------|
+| id | Trade ID | トレードID |
 | symbolName | Symbol | トレードシンボル |
 | direction | Direction | Long/Short |
 | positionSize | Size | 取引数量 |
@@ -107,7 +107,8 @@ TopstepXのトレードデータをNotionデータベースに自動同期する
 | entryTime | Entry Time | エントリー日時（コンマ秒切り捨て） |
 | exitedAt | Exit Time | エグジット日時（コンマ秒切り捨て） |
 | tradeDurationDisplay | Duration | トレード期間 |
-| id | Trade ID | トレードID |
+| - | Extracted At | データ取得時刻 |
+| pnL | Result | Win/Loss/Breakeven（PnLから自動判定） |
 
 ## トラブルシューティング
 

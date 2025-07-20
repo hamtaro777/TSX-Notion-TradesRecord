@@ -248,13 +248,6 @@ class NotionAPI {
       }
     }
 
-    // プラットフォーム情報
-    properties['Platform'] = {
-      select: {
-        name: 'TopstepX'
-      }
-    };
-
     // 損益の分類
     if (trade.pnl !== null && trade.pnl !== undefined) {
       properties['Result'] = {
