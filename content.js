@@ -1,4 +1,4 @@
-// TopstepX Notion Trader - Fixed Content Script
+// TopstepX Notion Trader - Fixed Content Script with Mutex
 class TopstepXNotionTrader {
   constructor() {
     this.settings = {};
@@ -9,6 +9,11 @@ class TopstepXNotionTrader {
     this.isEnabled = false;
     this.accountInfo = null;
     this.lastAccountSelectorText = null;
+    
+    // === 排他制御用のプロパティ ===
+    this.syncMutex = false; // 同期処理の排他制御
+    this.syncQueue = []; // 同期待ちキュー
+    
     this.init();
   }
 
@@ -23,7 +28,8 @@ class TopstepXNotionTrader {
       this.startObserving();
     }
 
-    setTimeout(() => this.checkTrades(), 2000);
+    // 初期チェック（排他制御適用）
+    setTimeout(() => this.executeSync('auto-initial'), 2000);
   }
 
   async loadSettings() {
@@ -84,7 +90,7 @@ class TopstepXNotionTrader {
 
   async handleManualSync() {
     try {
-      console.log('Manual sync started');
+      console.log('=== MANUAL SYNC REQUESTED ===');
 
       if (!this.isEnabled) {
         const missingSettings = [];
@@ -98,36 +104,15 @@ class TopstepXNotionTrader {
         };
       }
 
-      const trades = this.extractTradesFromPage();
-      console.log('Extracted trades:', trades.length);
-
-      let successCount = 0;
-      let duplicateCount = 0;
-      let errorCount = 0;
-
-      for (const trade of trades) {
-        const result = await this.sendToNotion(trade);
-        if (result === true) {
-          successCount++;
-        } else if (result && result.reason === 'duplicate') {
-          duplicateCount++;
-        } else {
-          errorCount++;
-        }
-      }
-
-      await this.updateStats(successCount);
-
-      const message = successCount > 0 || duplicateCount > 0 ?
-        `成功: ${successCount}件, 重複: ${duplicateCount}件${errorCount > 0 ? `, エラー: ${errorCount}件` : ''}` :
-        '新しいトレードはありません';
+      // 排他制御付きで手動同期実行
+      const result = await this.executeSync('manual');
 
       return {
         success: true,
-        count: successCount,
-        duplicateCount: duplicateCount,
-        errorCount: errorCount,
-        message: message
+        count: result.successCount,
+        duplicateCount: result.duplicateCount,
+        errorCount: result.errorCount,
+        message: result.message
       };
     } catch (error) {
       console.error('Manual sync error:', error);
@@ -135,6 +120,186 @@ class TopstepXNotionTrader {
         success: false,
         error: `同期エラー: ${error.message}`
       };
+    }
+  }
+
+  // === 排他制御付き同期実行メソッド ===
+  async executeSync(syncType = 'auto') {
+    return new Promise((resolve, reject) => {
+      // キューに追加
+      this.syncQueue.push({
+        type: syncType,
+        resolve,
+        reject,
+        timestamp: Date.now()
+      });
+
+      // 処理実行
+      this.processSyncQueue();
+    });
+  }
+
+  async processSyncQueue() {
+    // 既に処理中の場合は何もしない
+    if (this.syncMutex) {
+      console.log('🔒 Sync in progress, queuing request...');
+      return;
+    }
+
+    // キューが空の場合は何もしない
+    if (this.syncQueue.length === 0) {
+      return;
+    }
+
+    // ミューテックスを取得
+    this.syncMutex = true;
+    const currentSync = this.syncQueue.shift();
+
+    console.log(`🔄 Starting ${currentSync.type} sync (queue: ${this.syncQueue.length})`);
+
+    try {
+      const result = await this.performSync(currentSync.type);
+      currentSync.resolve(result);
+    } catch (error) {
+      console.error(`❌ ${currentSync.type} sync failed:`, error);
+      currentSync.reject(error);
+    } finally {
+      // ミューテックスを解放
+      this.syncMutex = false;
+      console.log(`✅ ${currentSync.type} sync completed, releasing mutex`);
+
+      // 次のキューを処理
+      setTimeout(() => this.processSyncQueue(), 100);
+    }
+  }
+
+  async performSync(syncType) {
+    console.log(`🔄 Performing ${syncType} sync...`);
+
+    if (!this.isEnabled) {
+      console.log('❌ Sync disabled, skipping');
+      return {
+        successCount: 0,
+        duplicateCount: 0,
+        errorCount: 0,
+        message: '同期が無効です'
+      };
+    }
+
+    const trades = this.extractTradesFromPage();
+    console.log(`📊 Extracted ${trades.length} trades from page`);
+
+    if (trades.length === 0) {
+      return {
+        successCount: 0,
+        duplicateCount: 0,
+        errorCount: 0,
+        message: 'トレードデータが見つかりません'
+      };
+    }
+
+    // 同期タイプに応じてフィルタリング
+    let tradesToProcess;
+    if (syncType === 'manual') {
+      // 手動同期：すべてのトレードを処理（重複チェックはNotion側で行う）
+      tradesToProcess = trades;
+      console.log(`📝 Manual sync: processing all ${trades.length} trades`);
+    } else {
+      // 自動同期：未処理のトレードのみ
+      tradesToProcess = trades.filter(trade => !this.processedTrades.has(trade.id));
+      console.log(`🤖 Auto sync: processing ${tradesToProcess.length} new trades (${trades.length - tradesToProcess.length} already processed)`);
+    }
+
+    if (tradesToProcess.length === 0) {
+      return {
+        successCount: 0,
+        duplicateCount: 0,
+        errorCount: 0,
+        message: '新しいトレードはありません'
+      };
+    }
+
+    let successCount = 0;
+    let duplicateCount = 0;
+    let errorCount = 0;
+
+    // トレードを順次処理（並行処理を避ける）
+    for (let i = 0; i < tradesToProcess.length; i++) {
+      const trade = tradesToProcess[i];
+      console.log(`🔄 Processing trade ${i + 1}/${tradesToProcess.length}: ${trade.symbolName || trade.symbol}`);
+
+      try {
+        const result = await this.sendToNotion(trade);
+        
+        if (result === true) {
+          successCount++;
+          this.processedTrades.add(trade.id);
+          console.log(`✅ Trade ${i + 1} registered successfully`);
+        } else if (result && result.reason === 'duplicate') {
+          duplicateCount++;
+          this.processedTrades.add(trade.id); // 重複も処理済みとしてマーク
+          console.log(`⚠️  Trade ${i + 1} skipped (duplicate)`);
+        } else {
+          errorCount++;
+          console.log(`❌ Trade ${i + 1} failed`);
+        }
+      } catch (error) {
+        errorCount++;
+        console.error(`❌ Trade ${i + 1} error:`, error);
+      }
+
+      // 過度な負荷を避けるため少し待機
+      if (i < tradesToProcess.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
+
+    // 統計更新
+    if (successCount > 0) {
+      await this.updateStats(successCount);
+    }
+
+    const message = this.buildSyncResultMessage(successCount, duplicateCount, errorCount);
+    
+    console.log(`🎉 ${syncType} sync completed: ${message}`);
+
+    return {
+      successCount,
+      duplicateCount,
+      errorCount,
+      message
+    };
+  }
+
+  buildSyncResultMessage(successCount, duplicateCount, errorCount) {
+    const parts = [];
+    
+    if (successCount > 0) {
+      parts.push(`成功: ${successCount}件`);
+    }
+    if (duplicateCount > 0) {
+      parts.push(`重複: ${duplicateCount}件`);
+    }
+    if (errorCount > 0) {
+      parts.push(`エラー: ${errorCount}件`);
+    }
+
+    if (parts.length === 0) {
+      return '新しいトレードはありません';
+    }
+
+    return parts.join(', ');
+  }
+
+  // === 既存のcheckTradesメソッドを排他制御版に変更 ===
+  async checkTrades() {
+    if (!this.isEnabled) return;
+
+    try {
+      // 排他制御付きで自動同期実行
+      await this.executeSync('auto-realtime');
+    } catch (error) {
+      console.error('Error in auto sync:', error);
     }
   }
 
@@ -644,8 +809,9 @@ class TopstepXNotionTrader {
         this.processedTrades.clear();
         console.log('Processed trades cleared due to account change');
 
+        // アカウント変更時も排他制御付きで同期
         setTimeout(() => {
-          this.checkTrades();
+          this.executeSync('auto-account-change');
         }, 1000);
       }
 
@@ -653,34 +819,6 @@ class TopstepXNotionTrader {
 
     } catch (error) {
       console.error('Error checking account change:', error);
-    }
-  }
-
-  async checkTrades() {
-    if (!this.isEnabled) return;
-
-    try {
-      const trades = this.extractTradesFromPage();
-      const newTrades = trades.filter(trade => !this.processedTrades.has(trade.id));
-
-      if (newTrades.length > 0) {
-        console.log(`Found ${newTrades.length} new trades`);
-
-        let successCount = 0;
-        for (const trade of newTrades) {
-          const result = await this.sendToNotion(trade);
-          if (result === true) {
-            this.processedTrades.add(trade.id);
-            successCount++;
-          }
-        }
-
-        if (successCount > 0) {
-          await this.updateStats(successCount);
-        }
-      }
-    } catch (error) {
-      console.error('Error checking trades:', error);
     }
   }
 
@@ -710,6 +848,10 @@ class TopstepXNotionTrader {
     this.processedTrades.clear();
     this.accountInfo = null;
     this.lastAccountSelectorText = null;
+    
+    // 排他制御関連のクリーンアップ
+    this.syncMutex = false;
+    this.syncQueue = [];
   }
 }
 
