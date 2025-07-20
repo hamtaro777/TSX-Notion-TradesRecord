@@ -1,11 +1,14 @@
-// TopstepX Notion Trader - Content Script
+// TopstepX Notion Trader - Content Script (Enhanced with Account Info)
 class TopstepXNotionTrader {
   constructor() {
     this.settings = {};
     this.observer = null;
+    this.accountObserver = null; // アカウント変更監視用
     this.processedTrades = new Set();
     this.lastTradeCheck = 0;
     this.isEnabled = false;
+    this.accountInfo = null; // アカウント情報をキャッシュ
+    this.lastAccountSelectorText = null; // アカウント変更検知用
     this.init();
   }
 
@@ -17,6 +20,9 @@ class TopstepXNotionTrader {
     
     // メッセージリスナーを設定
     this.setupMessageListener();
+    
+    // アカウント変更監視を開始
+    this.startAccountObserver();
     
     // DOM監視を開始
     if (this.settings.realTimeMonitoring) {
@@ -88,6 +94,11 @@ class TopstepXNotionTrader {
       this.startObserving();
     } else if (!this.settings.realTimeMonitoring && this.observer) {
       this.stopObserving();
+    }
+    
+    // アカウント監視は常に有効
+    if (!this.accountObserver) {
+      this.startAccountObserver();
     }
     
     console.log('Settings updated, isEnabled:', this.isEnabled);
@@ -195,6 +206,88 @@ class TopstepXNotionTrader {
       this.observer.disconnect();
       this.observer = null;
       console.log('Observer stopped');
+    }
+  }
+
+  // === 新機能：アカウント変更監視 ===
+  startAccountObserver() {
+    if (this.accountObserver) return;
+
+    const config = {
+      childList: true,
+      subtree: true,
+      characterData: true
+    };
+
+    this.accountObserver = new MutationObserver((mutations) => {
+      // アカウントセレクターの変更をチェック
+      this.checkAccountChange();
+    });
+
+    // アカウントセレクター領域を監視
+    const accountArea = document.querySelector('.layoutSelector_wrapper__tjzKt');
+    if (accountArea) {
+      this.accountObserver.observe(accountArea, config);
+      console.log('Account observer started for account selector');
+    } else {
+      // アカウントセレクターが見つからない場合はbody全体を監視
+      this.accountObserver.observe(document.body, config);
+      console.log('Account observer started for document body (fallback)');
+    }
+
+    // 初回のアカウント情報を取得
+    setTimeout(() => {
+      this.checkAccountChange();
+    }, 500);
+  }
+
+  stopAccountObserver() {
+    if (this.accountObserver) {
+      this.accountObserver.disconnect();
+      this.accountObserver = null;
+      console.log('Account observer stopped');
+    }
+  }
+
+  // === アカウント変更チェック ===
+  checkAccountChange() {
+    try {
+      const accountSelector = document.querySelector('.layoutSelector_wrapper__tjzKt .MuiSelect-select');
+      
+      if (!accountSelector) {
+        console.log('Account selector not found for change detection');
+        return;
+      }
+
+      const currentSelectorText = accountSelector.textContent?.trim();
+      
+      // 前回のテキストと比較
+      if (this.lastAccountSelectorText !== null && 
+          this.lastAccountSelectorText !== currentSelectorText) {
+        
+        console.log('=== ACCOUNT CHANGE DETECTED ===');
+        console.log('Previous:', this.lastAccountSelectorText);
+        console.log('Current:', currentSelectorText);
+        
+        // アカウント情報をクリアして再取得
+        this.accountInfo = null;
+        this.extractAccountInfo();
+        
+        // 処理済みトレードリストをクリア（新しいアカウントのトレードを重複扱いしないため）
+        this.processedTrades.clear();
+        console.log('Processed trades cleared due to account change');
+        
+        // 少し待ってからトレードデータを再チェック
+        setTimeout(() => {
+          this.checkTrades();
+        }, 1000);
+      }
+      
+      // 現在のテキストを保存
+      this.lastAccountSelectorText = currentSelectorText;
+      
+    } catch (error) {
+      console.error('Error checking account change:', error);
     }
   }
 
@@ -323,6 +416,128 @@ class TopstepXNotionTrader {
     return null;
   }
 
+  // === 新機能：アカウント情報を抽出 ===
+  extractAccountInfo() {
+    try {
+      console.log('Extracting account information...');
+      
+      // アカウントセレクタを探す
+      const accountSelector = document.querySelector('.layoutSelector_wrapper__tjzKt .MuiSelect-select');
+      
+      if (!accountSelector) {
+        console.log('Account selector not found');
+        return null;
+      }
+
+      // 選択されているメニューアイテムを取得
+      const selectedItem = accountSelector.querySelector('.MuiMenuItem-root');
+      
+      if (!selectedItem) {
+        console.log('Selected account item not found');
+        return null;
+      }
+
+      const itemContent = selectedItem.querySelector('.MuiBox-root');
+      if (!itemContent) {
+        console.log('Account item content not found');
+        return null;
+      }
+
+      // 全体のテキストを取得して分析
+      const fullText = itemContent.textContent?.trim();
+      console.log('Full account selector text:', fullText);
+
+      const spans = itemContent.querySelectorAll('span');
+      console.log('Found spans in account selector:', spans.length);
+      
+      // デバッグ：各spanの内容を出力
+      spans.forEach((span, index) => {
+        console.log(`Span ${index}: "${span.textContent?.trim()}"`);
+      });
+
+      let accountType = null;
+      let accountName = null;
+      let accountId = null;
+
+      // 全体テキストから正規表現で抽出（より確実）
+      if (fullText) {
+        // パターン1: AccountNameがある場合
+        // "$50K Trading Combine | NotionTest001 (50KTC-V2-140427-18973963)"
+        const pattern1 = /^(.+?)\s*\|\s*(.+?)\s*\(([^)]+)\)$/;
+        const match1 = fullText.match(pattern1);
+        
+        if (match1) {
+          accountType = match1[1].trim();
+          accountName = match1[2].trim();
+          accountId = match1[3].trim();
+          console.log('Matched pattern 1 (with AccountName)');
+        } else {
+          // パターン2: AccountNameがない場合
+          // "$150K PRACTICE | PRACTICEMAY2614173937"
+          const pattern2 = /^(.+?)\s*\|\s*(.+?)$/;
+          const match2 = fullText.match(pattern2);
+          
+          if (match2) {
+            accountType = match2[1].trim();
+            accountName = null;
+            accountId = match2[2].trim();
+            console.log('Matched pattern 2 (without AccountName)');
+          } else {
+            console.log('No pattern matched, falling back to span-based extraction');
+            
+            // fallback: span based extraction
+            if (spans.length >= 1) {
+              accountType = spans[0].textContent?.trim();
+            }
+            
+            if (spans.length >= 3) {
+              // spans[2]以降を確認
+              const spanTexts = Array.from(spans).map(s => s.textContent?.trim()).filter(t => t && t !== '|');
+              console.log('Non-separator span texts:', spanTexts);
+              
+              if (spanTexts.length >= 2) {
+                // 最後のspanが括弧付きかチェック
+                const lastSpan = spanTexts[spanTexts.length - 1];
+                if (lastSpan && lastSpan.includes('(') && lastSpan.includes(')')) {
+                  // AccountNameがある場合
+                  if (spanTexts.length >= 3) {
+                    accountName = spanTexts[1];
+                    accountId = lastSpan.replace(/[()]/g, '').trim();
+                  }
+                } else {
+                  // AccountNameがない場合
+                  accountName = null;
+                  accountId = spanTexts[1];
+                }
+              }
+            }
+          }
+        }
+      }
+
+      const accountInfo = {
+        accountType: accountType,
+        accountName: accountName || null,
+        accountId: accountId
+      };
+
+      console.log('Final extracted account info:', accountInfo);
+      
+      // 抽出結果の検証
+      if (!accountType || !accountId) {
+        console.warn('Account extraction incomplete:', accountInfo);
+      }
+      
+      // アカウント情報をキャッシュ
+      this.accountInfo = accountInfo;
+      
+      return accountInfo;
+    } catch (error) {
+      console.error('Error extracting account info:', error);
+      return null;
+    }
+  }
+
   async checkTrades() {
     if (!this.isEnabled) return;
 
@@ -359,6 +574,11 @@ class TopstepXNotionTrader {
     if (!tradesTab) {
       console.log('Trades tab not found');
       return trades;
+    }
+
+    // アカウント情報を確認（強制的に再取得はしない）
+    if (!this.accountInfo) {
+      this.extractAccountInfo();
     }
 
     console.log('Extracting trades from Trades tab');
@@ -421,7 +641,8 @@ class TopstepXNotionTrader {
     // ユニークIDを生成（TopstepXのIDがある場合はそれを使用）
     const id = tradeId || this.generateTradeId(symbolName, entryTime, entryPrice, positionSize, direction);
 
-    return {
+    // アカウント情報を含めてトレードデータを構築
+    const tradeData = {
       id,
       tradeId: tradeId,
       symbolName: symbolName,
@@ -440,6 +661,15 @@ class TopstepXNotionTrader {
       type: direction, // directionをtypeとしても保持
       extractedAt: new Date().toISOString()
     };
+
+    // アカウント情報を追加
+    if (this.accountInfo) {
+      tradeData.accountType = this.accountInfo.accountType;
+      tradeData.accountName = this.accountInfo.accountName;
+      tradeData.accountId = this.accountInfo.accountId;
+    }
+
+    return tradeData;
   }
 
   // === 改良されたトレードID生成 ===
@@ -591,7 +821,10 @@ class TopstepXNotionTrader {
   // クリーンアップ
   destroy() {
     this.stopObserving();
+    this.stopAccountObserver();
     this.processedTrades.clear();
+    this.accountInfo = null;
+    this.lastAccountSelectorText = null;
   }
 }
 

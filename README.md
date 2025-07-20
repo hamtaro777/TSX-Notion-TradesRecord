@@ -6,6 +6,7 @@ TopstepXのトレードデータをNotionデータベースに自動同期する
 
 - **自動同期**: TopstepXのTradesタブのデータをリアルタイムで監視し、新しいトレードを自動でNotionに登録
 - **手動同期**: ボタン一つで既存のトレードデータを一括同期
+- **アカウント情報同期**: アカウントタイプ、アカウント名、アカウントIDを自動抽出・同期 ⭐ **NEW**
 - **統計表示**: 同期したトレード数の統計を表示
 - **設定管理**: Notion APIトークンとデータベースIDの設定・保存
 - **エラーハンドリング**: 接続エラーや同期失敗の詳細なエラー表示
@@ -41,6 +42,9 @@ TopstepXのトレードデータをNotionデータベースに自動同期する
    | Duration | テキスト | トレード期間 |
    | Extracted At | 日付 | データ取得時刻 |
    | Result | セレクト | Win/Loss/Breakeven |
+   | **AccountType** | **セレクト** | **アカウントタイプ** ⭐ |
+   | **AccountName** | **セレクト** | **アカウント名** ⭐ |
+   | **AccountId** | **セレクト** | **アカウントID** ⭐ |
 
 3. **データベースの共有**
    - データベースページの右上「共有」をクリック
@@ -109,6 +113,34 @@ TopstepXのトレードデータをNotionデータベースに自動同期する
 | tradeDurationDisplay | Duration | トレード期間 |
 | - | Extracted At | データ取得時刻 |
 | pnL | Result | Win/Loss/Breakeven（PnLから自動判定） |
+| **アカウントセレクター** | **AccountType** | **アカウントタイプ** ⭐ |
+| **アカウントセレクター** | **AccountName** | **アカウント名** ⭐ |
+| **アカウントセレクター** | **AccountId** | **アカウントID** ⭐ |
+
+## アカウント情報の抽出 ⭐ **NEW**
+
+拡張機能は TopstepX のアカウントセレクターから以下の情報を自動抽出します：
+
+### パターン1: AccountNameがある場合
+```html
+$50K Trading Combine | NotionTest001 (50KTC-V2-140427-18973963)
+```
+- **AccountType**: `$50K Trading Combine`
+- **AccountName**: `NotionTest001`
+- **AccountId**: `50KTC-V2-140427-18973963`
+
+### パターン2: AccountNameがない場合
+```html
+$150K PRACTICE | PRACTICEMAY2614173937
+```
+- **AccountType**: `$150K PRACTICE`
+- **AccountName**: `null`（空白）
+- **AccountId**: `PRACTICEMAY2614173937`
+
+### 注意事項
+- アカウント情報は各トレードに自動的に付与されます
+- AccountNameが空白の場合、Notionでは空の値として保存されます
+- アカウント情報はページ読み込み時に1回抽出され、その後はキャッシュされます
 
 ## トラブルシューティング
 
@@ -128,11 +160,21 @@ TopstepXのトレードデータをNotionデータベースに自動同期する
    - 拡張機能は同じトレードIDで重複チェックを行います
    - 手動同期を複数回実行しても重複は作成されません
 
+4. **「アカウント情報が取得されない」** ⭐
+   - TopstepXのアカウントセレクターが表示されているか確認
+   - ページを再読み込みして再度同期を試行
+   - ブラウザコンソールで「Extracting account information...」ログを確認
+
 ### デバッグ
 
 1. **ブラウザコンソールを開く**（F12 → Console）
 2. **フィルターに「TopstepX」を入力**
 3. **エラーメッセージを確認**
+
+アカウント情報のデバッグ用ログ：
+- `Extracting account information...`
+- `Found spans in account selector: X`
+- `Extracted account info: {...}`
 
 ## セキュリティ
 
@@ -153,6 +195,11 @@ MIT License
 - 実行環境（OS、Chromeバージョン）
 
 ## 更新履歴
+
+### v1.1.0 ⭐ **NEW**
+- アカウント情報の自動抽出・同期機能を追加
+- AccountType、AccountName、AccountIdをNotionに送信
+- アカウント名が空白の場合の処理に対応
 
 ### v1.0.0
 - 初期リリース

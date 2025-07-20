@@ -1,4 +1,4 @@
-// Background Service Worker
+// Background Service Worker (Enhanced with Account Info)
 class NotionAPI {
   constructor() {
     this.setupMessageListener();
@@ -447,6 +447,31 @@ class NotionAPI {
       properties['Result'] = {
         select: {
           name: trade.pnl > 0 ? 'Win' : trade.pnl < 0 ? 'Loss' : 'Breakeven'
+        }
+      };
+    }
+
+    // === 新機能：アカウント情報の追加 ===
+    if (trade.accountType) {
+      properties['AccountType'] = {
+        select: {
+          name: trade.accountType
+        }
+      };
+    }
+
+    if (trade.accountName) {
+      properties['AccountName'] = {
+        select: {
+          name: trade.accountName
+        }
+      };
+    }
+
+    if (trade.accountId) {
+      properties['AccountId'] = {
+        select: {
+          name: trade.accountId
         }
       };
     }
