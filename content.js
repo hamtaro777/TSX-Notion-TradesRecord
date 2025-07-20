@@ -14,15 +14,15 @@ class TopstepXNotionTrader {
 
   async init() {
     console.log('TopstepX Notion Trader: Initializing...');
-    
+
     await this.loadSettings();
     this.setupMessageListener();
     this.startAccountObserver();
-    
+
     if (this.settings.realTimeMonitoring) {
       this.startObserving();
     }
-    
+
     setTimeout(() => this.checkTrades(), 2000);
   }
 
@@ -34,11 +34,11 @@ class TopstepXNotionTrader {
         'autoSync',
         'realTimeMonitoring'
       ]);
-      
-      this.isEnabled = this.settings.autoSync && 
-                      this.settings.notionToken && 
-                      this.settings.databaseId;
-      
+
+      this.isEnabled = this.settings.autoSync &&
+        this.settings.notionToken &&
+        this.settings.databaseId;
+
       console.log('Settings loaded, isEnabled:', this.isEnabled);
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -52,11 +52,11 @@ class TopstepXNotionTrader {
           this.handleSettingsUpdate(message.settings);
           sendResponse({ success: true });
           break;
-          
+
         case 'manualSync':
           this.handleManualSync().then(sendResponse);
           return true;
-          
+
         default:
           break;
       }
@@ -65,42 +65,42 @@ class TopstepXNotionTrader {
 
   handleSettingsUpdate(newSettings) {
     this.settings = { ...this.settings, ...newSettings };
-    this.isEnabled = this.settings.autoSync && 
-                    this.settings.notionToken && 
-                    this.settings.databaseId;
-    
+    this.isEnabled = this.settings.autoSync &&
+      this.settings.notionToken &&
+      this.settings.databaseId;
+
     if (this.settings.realTimeMonitoring && !this.observer) {
       this.startObserving();
     } else if (!this.settings.realTimeMonitoring && this.observer) {
       this.stopObserving();
     }
-    
+
     if (!this.accountObserver) {
       this.startAccountObserver();
     }
-    
+
     console.log('Settings updated, isEnabled:', this.isEnabled);
   }
 
   async handleManualSync() {
     try {
       console.log('Manual sync started');
-      
+
       if (!this.isEnabled) {
         const missingSettings = [];
         if (!this.settings.notionToken) missingSettings.push('Notion Token');
         if (!this.settings.databaseId) missingSettings.push('Database ID');
         if (!this.settings.autoSync) missingSettings.push('Auto Sync (disabled)');
-        
-        return { 
-          success: false, 
-          error: `設定が不完全です: ${missingSettings.join(', ')}` 
+
+        return {
+          success: false,
+          error: `設定が不完全です: ${missingSettings.join(', ')}`
         };
       }
 
       const trades = this.extractTradesFromPage();
       console.log('Extracted trades:', trades.length);
-      
+
       let successCount = 0;
       let duplicateCount = 0;
       let errorCount = 0;
@@ -118,12 +118,12 @@ class TopstepXNotionTrader {
 
       await this.updateStats(successCount);
 
-      const message = successCount > 0 || duplicateCount > 0 ? 
+      const message = successCount > 0 || duplicateCount > 0 ?
         `成功: ${successCount}件, 重複: ${duplicateCount}件${errorCount > 0 ? `, エラー: ${errorCount}件` : ''}` :
         '新しいトレードはありません';
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         count: successCount,
         duplicateCount: duplicateCount,
         errorCount: errorCount,
@@ -131,9 +131,9 @@ class TopstepXNotionTrader {
       };
     } catch (error) {
       console.error('Manual sync error:', error);
-      return { 
-        success: false, 
-        error: `同期エラー: ${error.message}` 
+      return {
+        success: false,
+        error: `同期エラー: ${error.message}`
       };
     }
   }
@@ -141,69 +141,69 @@ class TopstepXNotionTrader {
   // === 改良されたfindTradesTab メソッド ===
   findTradesTab() {
     console.log('Looking for Trades tab...');
-    
+
     // Method 1: Direct ID lookup (診断結果から trades IDが確認されている)
     const tradesPanel = document.getElementById('trades');
     if (tradesPanel && this.isPanelVisible(tradesPanel)) {
       console.log('Found Trades tab by direct ID lookup');
       return tradesPanel;
     }
-    
+
     // Method 2: Tab panel analysis (既存のロジック)
     const panels = document.querySelectorAll('[role="tabpanel"]');
     console.log('Checking', panels.length, 'tab panels...');
-    
+
     for (const panel of panels) {
       if (!this.isPanelVisible(panel)) continue;
-      
+
       const headers = panel.querySelectorAll('.MuiDataGrid-columnHeaderTitle');
       const headerTexts = Array.from(headers).map(h => h.textContent?.trim());
-      
+
       console.log('Panel headers:', headerTexts);
-      
+
       // Tradesタブの特徴的なヘッダーを確認
       const tradesIndicators = [
         'Exit Time', 'Exit Price', 'P&L', 'Duration', 'Entry Price', 'Entry Time'
       ];
-      
+
       const ordersIndicators = [
         'Order Type', 'Status', 'Time in Force', 'TIF'
       ];
-      
+
       const hasTradesIndicators = tradesIndicators.some(indicator =>
         headerTexts.some(text => text && text.includes(indicator))
       );
-      
+
       const hasOrdersIndicators = ordersIndicators.some(indicator =>
         headerTexts.some(text => text && text.includes(indicator))
       );
-      
+
       // データ行があることも確認
       const dataRows = panel.querySelectorAll('.MuiDataGrid-virtualScrollerRenderZone .MuiDataGrid-row[data-id]');
-      
+
       console.log(`Panel analysis: hasTradesIndicators=${hasTradesIndicators}, hasOrdersIndicators=${hasOrdersIndicators}, dataRows=${dataRows.length}`);
-      
+
       if (hasTradesIndicators && !hasOrdersIndicators && dataRows.length > 0) {
         console.log('Found Trades tab panel');
         return panel;
       }
     }
-    
+
     console.log('Trades tab not found');
     return null;
   }
 
   isPanelVisible(element) {
     const style = window.getComputedStyle(element);
-    return style.display !== 'none' && 
-           style.visibility !== 'hidden' && 
-           style.opacity !== '0';
+    return style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      style.opacity !== '0';
   }
 
   extractTradesFromPage() {
     const trades = [];
     const tradesTab = this.findTradesTab();
-    
+
     if (!tradesTab) {
       console.log('Trades tab not found');
       return trades;
@@ -216,7 +216,7 @@ class TopstepXNotionTrader {
     console.log('Extracting trades from Trades tab');
     const dataRows = tradesTab.querySelectorAll('.MuiDataGrid-virtualScrollerRenderZone .MuiDataGrid-row[data-id]');
     console.log(`Found ${dataRows.length} data rows in Trades tab`);
-    
+
     dataRows.forEach((row, index) => {
       try {
         const trade = this.extractTradeFromRow(row);
@@ -242,7 +242,7 @@ class TopstepXNotionTrader {
     // すべてのセルのdata-fieldを確認してデバッグ
     const allCells = row.querySelectorAll('.MuiDataGrid-cell[data-field]');
     const fieldNames = Array.from(allCells).map(cell => cell.getAttribute('data-field'));
-    
+
     // 診断結果に基づいて修正されたフィールドマッピング
     const tradeId = getCellValue('id');
     const symbolName = getCellValue('symbolName').replace(/\//g, '');
@@ -258,7 +258,7 @@ class TopstepXNotionTrader {
     const direction = getCellValue('direction');
 
     console.log('Extracted cell values:', {
-      tradeId, symbolName, positionSize, entryTime, exitedAt, 
+      tradeId, symbolName, positionSize, entryTime, exitedAt,
       entryPrice, exitPrice, pnl, direction
     });
 
@@ -303,10 +303,10 @@ class TopstepXNotionTrader {
   extractAccountInfo() {
     try {
       console.log('Extracting account information...');
-      
+
       // アカウントセレクタを探す
       const accountSelector = document.querySelector('.layoutSelector_wrapper__tjzKt .MuiSelect-select');
-      
+
       if (!accountSelector) {
         console.log('Account selector not found');
         return null;
@@ -314,7 +314,7 @@ class TopstepXNotionTrader {
 
       // 選択されているメニューアイテムを取得
       const selectedItem = accountSelector.querySelector('.MuiMenuItem-root');
-      
+
       if (!selectedItem) {
         console.log('Selected account item not found');
         return null;
@@ -332,7 +332,7 @@ class TopstepXNotionTrader {
 
       const spans = itemContent.querySelectorAll('span');
       console.log('Found spans in account selector:', spans.length);
-      
+
       // デバッグ：各spanの内容を出力
       spans.forEach((span, index) => {
         console.log(`Span ${index}: "${span.textContent?.trim()}"`);
@@ -348,7 +348,7 @@ class TopstepXNotionTrader {
         // "$50K Trading Combine | NotionTest001 (50KTC-V2-140427-18973963)"
         const pattern1 = /^(.+?)\s*\|\s*(.+?)\s*\(([^)]+)\)$/;
         const match1 = fullText.match(pattern1);
-        
+
         if (match1) {
           accountType = match1[1].trim();
           accountName = match1[2].trim();
@@ -359,7 +359,7 @@ class TopstepXNotionTrader {
           // "$150K PRACTICE | PRACTICEMAY2614173937"
           const pattern2 = /^(.+?)\s*\|\s*(.+?)$/;
           const match2 = fullText.match(pattern2);
-          
+
           if (match2) {
             accountType = match2[1].trim();
             accountName = null;
@@ -367,17 +367,17 @@ class TopstepXNotionTrader {
             console.log('Matched pattern 2 (without AccountName)');
           } else {
             console.log('No pattern matched, falling back to span-based extraction');
-            
+
             // fallback: span based extraction
             if (spans.length >= 1) {
               accountType = spans[0].textContent?.trim();
             }
-            
+
             if (spans.length >= 3) {
               // spans[2]以降を確認
               const spanTexts = Array.from(spans).map(s => s.textContent?.trim()).filter(t => t && t !== '|');
               console.log('Non-separator span texts:', spanTexts);
-              
+
               if (spanTexts.length >= 2) {
                 // 最後のspanが括弧付きかチェック
                 const lastSpan = spanTexts[spanTexts.length - 1];
@@ -405,15 +405,15 @@ class TopstepXNotionTrader {
       };
 
       console.log('Final extracted account info:', accountInfo);
-      
+
       // 抽出結果の検証
       if (!accountType || !accountId) {
         console.warn('Account extraction incomplete:', accountInfo);
       }
-      
+
       // アカウント情報をキャッシュ
       this.accountInfo = accountInfo;
-      
+
       return accountInfo;
     } catch (error) {
       console.error('Error extracting account info:', error);
@@ -429,7 +429,7 @@ class TopstepXNotionTrader {
       direction || '',
       entryTime ? new Date(entryTime).getTime() : Date.now()
     ];
-    
+
     const dataString = elements.join('-');
     return this.simpleHash(dataString);
   }
@@ -453,24 +453,24 @@ class TopstepXNotionTrader {
 
   parseDateTime(str) {
     if (!str) return null;
-    
+
     try {
       const dateTimeMatch = str.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?/);
       if (dateTimeMatch) {
         const [, year, month, day, hours, minutes, seconds] = dateTimeMatch;
         const isoString = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000Z`;
         const date = new Date(isoString);
-        
+
         if (!isNaN(date.getTime())) {
           return date.toISOString();
         }
       }
-      
+
       const date = new Date(str);
       if (!isNaN(date.getTime())) {
         return date.toISOString();
       }
-      
+
       return str;
     } catch (error) {
       console.error('Error parsing datetime:', str, error);
@@ -480,16 +480,37 @@ class TopstepXNotionTrader {
 
   async sendToNotion(trade) {
     try {
-      console.log('Sending to Notion - Trade data:', trade);
-      
+      console.log('=== Sending to Notion - Enhanced duplicate prevention ===');
+      console.log('Trade data:', {
+        id: trade.id,
+        tradeId: trade.tradeId,
+        symbol: trade.symbolName,
+        entryPrice: trade.entryPrice,
+        pnl: trade.pnl
+      });
+
+      // 強化された重複チェック実行
       const duplicateCheck = await this.checkNotionDuplicate(trade);
-      
+
       if (duplicateCheck.isDuplicate) {
-        console.log('Duplicate trade found in Notion, skipping:', trade.id);
+        console.log(`⚠️  DUPLICATE DETECTED - SKIPPING REGISTRATION`);
+        console.log(`   Match type: ${duplicateCheck.matchedBy}`);
+        console.log(`   Match count: ${duplicateCheck.matchCount}`);
+        console.log(`   Trade ID: ${trade.id || trade.tradeId}`);
+
+        // ローカルキャッシュに追加（重複として処理済みマーク）
         this.processedTrades.add(trade.id);
-        return { success: true, reason: 'duplicate' };
+
+        return {
+          success: true,
+          reason: 'duplicate',
+          details: duplicateCheck
+        };
       }
 
+      console.log('✅ No duplicates found - Proceeding with registration');
+
+      // Notionに送信
       const response = await chrome.runtime.sendMessage({
         action: 'sendToNotion',
         trade: trade,
@@ -500,15 +521,15 @@ class TopstepXNotionTrader {
       console.log('Notion API response:', response);
 
       if (response && response.success) {
-        console.log('Trade sent to Notion successfully:', trade.symbolName);
+        console.log('✅ Trade registered successfully in Notion:', trade.symbolName);
         this.processedTrades.add(trade.id);
         return true;
       } else {
-        console.error('Failed to send trade to Notion:', response?.error || 'Unknown error');
+        console.error('❌ Failed to register trade in Notion:', response?.error || 'Unknown error');
         return false;
       }
     } catch (error) {
-      console.error('Error sending trade to Notion:', error);
+      console.error('❌ Error in sendToNotion:', error);
       return false;
     }
   }
@@ -603,33 +624,33 @@ class TopstepXNotionTrader {
   checkAccountChange() {
     try {
       const accountSelector = document.querySelector('.layoutSelector_wrapper__tjzKt .MuiSelect-select');
-      
+
       if (!accountSelector) {
         console.log('Account selector not found for change detection');
         return;
       }
 
       const currentSelectorText = accountSelector.textContent?.trim();
-      
-      if (this.lastAccountSelectorText !== null && 
-          this.lastAccountSelectorText !== currentSelectorText) {
-        
+
+      if (this.lastAccountSelectorText !== null &&
+        this.lastAccountSelectorText !== currentSelectorText) {
+
         console.log('=== ACCOUNT CHANGE DETECTED ===');
         console.log('Previous:', this.lastAccountSelectorText);
         console.log('Current:', currentSelectorText);
-        
+
         this.accountInfo = null;
         this.extractAccountInfo();
         this.processedTrades.clear();
         console.log('Processed trades cleared due to account change');
-        
+
         setTimeout(() => {
           this.checkTrades();
         }, 1000);
       }
-      
+
       this.lastAccountSelectorText = currentSelectorText;
-      
+
     } catch (error) {
       console.error('Error checking account change:', error);
     }
@@ -641,10 +662,10 @@ class TopstepXNotionTrader {
     try {
       const trades = this.extractTradesFromPage();
       const newTrades = trades.filter(trade => !this.processedTrades.has(trade.id));
-      
+
       if (newTrades.length > 0) {
         console.log(`Found ${newTrades.length} new trades`);
-        
+
         let successCount = 0;
         for (const trade of newTrades) {
           const result = await this.sendToNotion(trade);
@@ -653,7 +674,7 @@ class TopstepXNotionTrader {
             successCount++;
           }
         }
-        
+
         if (successCount > 0) {
           await this.updateStats(successCount);
         }
@@ -666,10 +687,10 @@ class TopstepXNotionTrader {
   async updateStats(newTradeCount) {
     try {
       const stats = await chrome.storage.local.get(['totalTrades', 'todayTrades', 'lastStatsUpdate']);
-      
+
       const today = new Date().toDateString();
       const isNewDay = stats.lastStatsUpdate !== today;
-      
+
       const updatedStats = {
         totalTrades: (stats.totalTrades || 0) + newTradeCount,
         todayTrades: isNewDay ? newTradeCount : (stats.todayTrades || 0) + newTradeCount,
@@ -700,7 +721,7 @@ function initializeTrader() {
     if (traderInstance) {
       traderInstance.destroy();
     }
-    
+
     if (window.location.hostname.includes('topstepx.com')) {
       traderInstance = new TopstepXNotionTrader();
       console.log('TopstepX Notion Trader: Initialized successfully');

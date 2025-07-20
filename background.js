@@ -30,7 +30,7 @@ class NotionAPI {
       console.log('Testing Notion connection...');
       console.log('Token format check:', token ? `${token.substring(0, 10)}...` : 'No token');
       console.log('Database ID:', databaseId);
-      
+
       const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}`, {
         method: 'GET',
         headers: {
@@ -50,7 +50,7 @@ class NotionAPI {
 
       const database = await response.json();
       console.log('Notion connection test successful:', database.title);
-      
+
       return {
         success: true,
         database: {
@@ -76,16 +76,16 @@ class NotionAPI {
 
       const pageData = this.buildNotionPageData(trade);
       console.log('Built page data:', pageData);
-      
+
       const requestBody = {
         parent: {
           database_id: databaseId
         },
         properties: pageData
       };
-      
+
       console.log('Request body:', JSON.stringify(requestBody, null, 2));
-      
+
       const response = await fetch('https://api.notion.com/v1/pages', {
         method: 'POST',
         headers: {
@@ -123,7 +123,7 @@ class NotionAPI {
   // === 重複チェックメソッド ===
   async checkDuplicate(trade, token, databaseId) {
     try {
-      console.log('=== Starting duplicate check ===');
+      console.log('=== Starting enhanced duplicate check ===');
       console.log('Trade to check:', {
         id: trade.id,
         tradeId: trade.tradeId,
@@ -132,13 +132,18 @@ class NotionAPI {
         entryPrice: trade.entryPrice
       });
 
-      // 複数の条件で重複チェック
+      // Trade IDが存在する場合は必ずチェック
+      if (!trade.id && !trade.tradeId) {
+        console.log('No Trade ID available for duplicate check');
+        return { isDuplicate: false };
+      }
+
       const queries = [];
 
-      // 1. Trade IDでの検索（最も確実）
+      // 1. 生成されたTrade IDでの検索
       if (trade.id) {
         queries.push({
-          name: 'Trade ID exact match',
+          name: 'Generated Trade ID match',
           filter: {
             property: 'Trade ID',
             title: {
@@ -148,10 +153,10 @@ class NotionAPI {
         });
       }
 
-      // 2. TopstepX IDでの検索
+      // 2. TopstepX原始IDでの検索
       if (trade.tradeId) {
         queries.push({
-          name: 'TopstepX ID exact match',
+          name: 'TopstepX Trade ID match',
           filter: {
             property: 'Trade ID',
             title: {
@@ -161,92 +166,50 @@ class NotionAPI {
         });
       }
 
-      // 3. 複合条件での検索（Symbol + Entry Price + Size）- より緩い条件
-      if (trade.symbolName && trade.entryPrice && trade.positionSize) {
-        queries.push({
-          name: 'Symbol + Entry Price + Size match',
-          filter: {
-            and: [
-              {
-                property: 'Symbol',
-                select: {
-                  equals: trade.symbolName
-                }
-              },
-              {
-                property: 'Entry Price',
-                number: {
-                  equals: trade.entryPrice
-                }
-              },
-              {
-                property: 'Size',
-                number: {
-                  equals: trade.positionSize
-                }
-              }
-            ]
-          }
-        });
-      }
-
-      // 4. より基本的な条件（Symbol + Entry Price）
-      if (trade.symbolName && trade.entryPrice) {
-        queries.push({
-          name: 'Symbol + Entry Price match',
-          filter: {
-            and: [
-              {
-                property: 'Symbol',
-                select: {
-                  equals: trade.symbolName
-                }
-              },
-              {
-                property: 'Entry Price',
-                number: {
-                  equals: trade.entryPrice
-                }
-              }
-            ]
-          }
-        });
-      }
-
       console.log(`Running ${queries.length} duplicate check queries...`);
 
-      // 各クエリを実行して重複チェック
+      // 各クエリを順番に実行
       for (let i = 0; i < queries.length; i++) {
         const query = queries[i];
         console.log(`Executing query ${i + 1}/${queries.length}: ${query.name}`);
-        
+
         try {
           const result = await this.queryNotionDatabase(token, databaseId, query.filter);
+
           if (result.isDuplicate) {
             console.log(`=== DUPLICATE FOUND with ${query.name} ===`);
             console.log('Matched records:', result.results.length);
-            return { 
-              isDuplicate: true, 
+
+            // 詳細な重複情報をログ出力
+            result.results.forEach((record, index) => {
+              const existingTradeId = record.properties['Trade ID']?.title?.[0]?.text?.content;
+              const existingSymbol = record.properties['Symbol']?.select?.name;
+              const existingEntryPrice = record.properties['Entry Price']?.number;
+              console.log(`  Existing record ${index + 1}: ID=${existingTradeId}, Symbol=${existingSymbol}, Entry=${existingEntryPrice}`);
+            });
+
+            return {
+              isDuplicate: true,
               matchedBy: query.name,
-              matchCount: result.results.length
+              matchCount: result.results.length,
+              existingRecords: result.results
             };
           }
         } catch (queryError) {
           console.error(`Query ${i + 1} failed:`, queryError);
-          // 1つのクエリが失敗しても続行
           continue;
         }
       }
 
-      console.log('=== NO DUPLICATES FOUND ===');
+      console.log('=== NO DUPLICATES FOUND - SAFE TO PROCEED ===');
       return { isDuplicate: false };
 
     } catch (error) {
       console.error('Error in duplicate check:', error);
-      // エラー時は重複なしとして返す（処理を止めない）
-      return { 
-        isDuplicate: false, 
-        error: error.message 
+      // エラー時も重複なしとして返す（処理継続）
+      return {
+        isDuplicate: false,
+        error: error.message
       };
     }
   }
