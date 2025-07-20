@@ -99,9 +99,9 @@ class PopupManager {
         return;
       }
 
-      // Notion Tokenの形式チェック（secret_で始まる）
-      if (!settings.notionToken.startsWith('secret_')) {
-        this.showStatus('Notion Tokenの形式が正しくありません（secret_で始まる必要があります）', 'error');
+      // Notion Tokenの形式チェック（secret_またはntn_で始まる）
+      if (!settings.notionToken.startsWith('secret_') && !settings.notionToken.startsWith('ntn_')) {
+        this.showStatus('Notion Tokenの形式が正しくありません（secret_またはntn_で始まる必要があります）', 'error');
         return;
       }
 
