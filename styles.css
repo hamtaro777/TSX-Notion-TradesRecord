@@ -1,0 +1,233 @@
+/* TopstepX Notion Trader - UI Styles */
+
+.topstepx-notion-indicator {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 999999;
+  background: rgba(34, 197, 94, 0.9);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  user-select: none;
+  pointer-events: none;
+}
+
+.topstepx-notion-indicator.syncing {
+  background: rgba(59, 130, 246, 0.9);
+  animation: pulse 2s infinite;
+}
+
+.topstepx-notion-indicator.error {
+  background: rgba(239, 68, 68, 0.9);
+}
+
+.topstepx-notion-indicator.disabled {
+  background: rgba(107, 114, 128, 0.9);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* トレード行のハイライト */
+.topstepx-trade-processed {
+  background: rgba(34, 197, 94, 0.1) !important;
+  border-left: 3px solid #22c55e !important;
+}
+
+.topstepx-trade-processing {
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-left: 3px solid #3b82f6 !important;
+}
+
+.topstepx-trade-error {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-left: 3px solid #ef4444 !important;
+}
+
+/* 統計表示パネル */
+.topstepx-stats-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 999998;
+  background: rgba(24, 26, 31, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  backdrop-filter: blur(10px);
+  min-width: 200px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.topstepx-stats-panel.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.topstepx-stats-panel h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fbbf24;
+}
+
+.topstepx-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.topstepx-stat-item {
+  text-align: center;
+}
+
+.topstepx-stat-number {
+  font-size: 18px;
+  font-weight: bold;
+  color: #4ade80;
+  line-height: 1;
+}
+
+.topstepx-stat-label {
+  font-size: 10px;
+  color: #8b92a5;
+  margin-top: 2px;
+}
+
+/* 設定ボタン */
+.topstepx-settings-btn {
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  z-index: 999997;
+  background: rgba(59, 130, 246, 0.9);
+  color: white;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.topstepx-settings-btn:hover {
+  background: rgba(37, 99, 235, 0.9);
+  transform: scale(1.05);
+}
+
+/* ダークモード対応 */
+@media (prefers-color-scheme: light) {
+  .topstepx-stats-panel {
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    color: #1f2937;
+  }
+  
+  .topstepx-stats-panel h3 {
+    color: #d97706;
+  }
+  
+  .topstepx-stat-number {
+    color: #059669;
+  }
+  
+  .topstepx-stat-label {
+    color: #6b7280;
+  }
+}
+
+/* モバイル対応 */
+@media (max-width: 768px) {
+  .topstepx-notion-indicator {
+    top: 10px;
+    right: 10px;
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+  
+  .topstepx-stats-panel {
+    bottom: 10px;
+    right: 10px;
+    padding: 12px;
+    min-width: 160px;
+  }
+  
+  .topstepx-stats-grid {
+    gap: 8px;
+  }
+  
+  .topstepx-stat-number {
+    font-size: 16px;
+  }
+  
+  .topstepx-settings-btn {
+    top: 50px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+}
+
+/* アニメーション効果 */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.topstepx-notion-indicator,
+.topstepx-stats-panel,
+.topstepx-settings-btn {
+  animation: slideInRight 0.3s ease-out;
+}
+
+/* 成功・エラー時のフラッシュ効果 */
+@keyframes flash-success {
+  0%, 100% { background: rgba(34, 197, 94, 0.9); }
+  50% { background: rgba(34, 197, 94, 1); }
+}
+
+@keyframes flash-error {
+  0%, 100% { background: rgba(239, 68, 68, 0.9); }
+  50% { background: rgba(239, 68, 68, 1); }
+}
+
+.topstepx-notion-indicator.flash-success {
+  animation: flash-success 0.5s ease-in-out;
+}
+
+.topstepx-notion-indicator.flash-error {
+  animation: flash-error 0.5s ease-in-out;
+}

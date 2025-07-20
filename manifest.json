@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "TopstepX Notion Trader",
+  "version": "1.0.0",
+  "description": "TopstepXのトレードデータをNotionデータベースに自動登録",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.topstepx.com/*",
+    "*://topstepx.com/*",
+    "*://api.notion.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.topstepx.com/*",
+        "*://topstepx.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "TopstepX Notion Trader"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

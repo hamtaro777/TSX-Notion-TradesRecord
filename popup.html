@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            width: 380px;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            margin: 0;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 15px;
+        }
+        
+        .logo {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2563eb;
+            margin-bottom: 5px;
+        }
+        
+        .subtitle {
+            color: #6b7280;
+            font-size: 12px;
+        }
+        
+        .section {
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #374151;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #374151;
+        }
+        
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        input[type="text"]:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            width: 100%;
+            transition: background-color 0.2s;
+        }
+        
+        .button:hover {
+            background: #2563eb;
+        }
+        
+        .button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        
+        .button-secondary {
+            background: #6b7280;
+            margin-top: 8px;
+        }
+        
+        .button-secondary:hover {
+            background: #4b5563;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+        
+        .status.success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+        
+        .status.error {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+        
+        .status.info {
+            background: #dbeafe;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+        }
+        
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        
+        .toggle {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #3b82f6;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: #f9fafb;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .stat-number {
+            font-size: 18px;
+            font-weight: bold;
+            color: #3b82f6;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 5px;
+        }
+        
+        .link {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+        
+        .link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">TopstepX Notion Trader</div>
+        <div class="subtitle">トレードデータをNotionに自動保存</div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Notion設定</div>
+        
+        <div class="form-group">
+            <label for="notionToken">Notion Integration Token</label>
+            <input type="password" id="notionToken" placeholder="secret_...">
+            <div class="help-text">
+                <a href="https://www.notion.so/my-integrations" class="link" target="_blank">インテグレーション作成ページ</a>で取得
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="databaseId">Database ID</label>
+            <input type="text" id="databaseId" placeholder="データベースIDを入力">
+            <div class="help-text">NotionデータベースURLの最後の32文字</div>
+        </div>
+        
+        <button class="button" id="testConnection">接続テスト</button>
+        <button class="button button-secondary" id="saveSettings">設定を保存</button>
+    </div>
+
+    <div class="section">
+        <div class="section-title">自動同期設定</div>
+        
+        <div class="toggle-container">
+            <label>自動同期を有効化</label>
+            <label class="toggle">
+                <input type="checkbox" id="autoSync">
+                <span class="slider"></span>
+            </label>
+        </div>
+        
+        <div class="toggle-container">
+            <label>リアルタイム監視</label>
+            <label class="toggle">
+                <input type="checkbox" id="realTimeMonitoring">
+                <span class="slider"></span>
+            </label>
+        </div>
+        
+        <button class="button" id="manualSync">手動同期実行</button>
+    </div>
+
+    <div class="section">
+        <div class="section-title">統計情報</div>
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-number" id="totalTrades">0</div>
+                <div class="stat-label">総トレード数</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="todayTrades">0</div>
+                <div class="stat-label">今日のトレード</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="statusMessage"></div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
