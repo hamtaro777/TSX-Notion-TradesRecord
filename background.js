@@ -392,7 +392,8 @@ class NotionAPI {
         if (!isNaN(entryDate.getTime())) {
           properties['Entry Time'] = {
             date: {
-              start: entryDate.toISOString()
+              start: entryDate.toISOString(),
+              time_zone: 'Asia/Tokyo'  // 東京タイムゾーンを指定
             }
           };
         }
@@ -407,7 +408,8 @@ class NotionAPI {
         if (!isNaN(exitDate.getTime())) {
           properties['Exit Time'] = {
             date: {
-              start: exitDate.toISOString()
+              start: exitDate.toISOString(),
+              time_zone: 'Asia/Tokyo'  // 東京タイムゾーンを指定
             }
           };
         }
@@ -480,6 +482,7 @@ class NotionAPI {
     return properties;
   }
 }
+
 
 // Service Worker初期化
 const notionAPI = new NotionAPI();
