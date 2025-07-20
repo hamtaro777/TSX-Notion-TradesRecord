@@ -95,7 +95,7 @@ class TopstepXNotionTrader {
 
   async handleManualSync() {
     try {
-      console.log('Manual sync started');
+      console.log('Manual sync started with duplicate checking');
       console.log('Current settings:', this.settings);
       console.log('isEnabled:', this.isEnabled);
       
@@ -117,26 +117,22 @@ class TopstepXNotionTrader {
       const trades = this.extractTradesFromPage();
       console.log('Extracted trades:', trades);
       
-      const newTrades = trades.filter(trade => !this.processedTrades.has(trade.id));
-      console.log('New trades to sync:', newTrades);
-      
-      if (newTrades.length === 0) {
-        return { 
-          success: true, 
-          count: 0, 
-          message: '新しいトレードはありません' 
-        };
-      }
-
       let successCount = 0;
-      for (const trade of newTrades) {
-        console.log('Sending trade to Notion:', trade);
-        const success = await this.sendToNotion(trade);
-        if (success) {
-          this.processedTrades.add(trade.id);
+      let duplicateCount = 0;
+      let errorCount = 0;
+
+      for (const trade of trades) {
+        console.log(`Processing trade ${successCount + duplicateCount + errorCount + 1}/${trades.length}:`, trade.symbolName);
+        
+        const result = await this.sendToNotion(trade);
+        if (result === true) {
           successCount++;
           console.log(`Trade ${trade.id} sent successfully`);
+        } else if (result && result.reason === 'duplicate') {
+          duplicateCount++;
+          console.log(`Trade ${trade.id} skipped (duplicate)`);
         } else {
+          errorCount++;
           console.error(`Failed to send trade ${trade.id}`);
         }
       }
@@ -144,9 +140,16 @@ class TopstepXNotionTrader {
       // 統計を更新
       await this.updateStats(successCount);
 
+      const message = successCount > 0 || duplicateCount > 0 ? 
+        `成功: ${successCount}件, 重複スキップ: ${duplicateCount}件${errorCount > 0 ? `, エラー: ${errorCount}件` : ''}` :
+        '新しいトレードはありません';
+
       return { 
         success: true, 
-        count: successCount 
+        count: successCount,
+        duplicateCount: duplicateCount,
+        errorCount: errorCount,
+        message: message
       };
     } catch (error) {
       console.error('Manual sync error:', error);
@@ -330,15 +333,19 @@ class TopstepXNotionTrader {
       if (newTrades.length > 0) {
         console.log(`Found ${newTrades.length} new trades`);
         
+        let successCount = 0;
         for (const trade of newTrades) {
-          const success = await this.sendToNotion(trade);
-          if (success) {
+          const result = await this.sendToNotion(trade);
+          if (result === true) {
             this.processedTrades.add(trade.id);
+            successCount++;
           }
         }
         
         // 統計を更新
-        await this.updateStats(newTrades.length);
+        if (successCount > 0) {
+          await this.updateStats(successCount);
+        }
       }
     } catch (error) {
       console.error('Error checking trades:', error);
@@ -412,7 +419,7 @@ class TopstepXNotionTrader {
     }
 
     // ユニークIDを生成（TopstepXのIDがある場合はそれを使用）
-    const id = tradeId || this.generateTradeId(symbolName, entryTime, entryPrice, positionSize);
+    const id = tradeId || this.generateTradeId(symbolName, entryTime, entryPrice, positionSize, direction);
 
     return {
       id,
@@ -435,9 +442,30 @@ class TopstepXNotionTrader {
     };
   }
 
-  generateTradeId(symbolName, entryTime, entryPrice, positionSize) {
-    const data = `${symbolName}-${entryTime}-${entryPrice}-${positionSize}`;
-    return btoa(data).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+  // === 改良されたトレードID生成 ===
+  generateTradeId(symbolName, entryTime, entryPrice, positionSize, direction) {
+    // 複数の要素を組み合わせて一意性を向上
+    const elements = [
+      symbolName || '',
+      entryPrice || '',
+      positionSize || '',
+      direction || '',
+      entryTime ? new Date(entryTime).getTime() : Date.now()
+    ];
+    
+    const dataString = elements.join('-');
+    return this.simpleHash(dataString);
+  }
+
+  // === シンプルなハッシュ関数 ===
+  simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // 32bit整数に変換
+    }
+    return Math.abs(hash).toString(36);
   }
 
   parseNumber(str) {
@@ -479,12 +507,24 @@ class TopstepXNotionTrader {
     }
   }
 
+  // === Notion重複チェック付きの送信メソッド ===
   async sendToNotion(trade) {
     try {
       console.log('Sending to Notion - Trade data:', trade);
       console.log('Sending to Notion - Token available:', !!this.settings.notionToken);
       console.log('Sending to Notion - Database ID available:', !!this.settings.databaseId);
       
+      // === Notion側重複チェック ===
+      console.log('Checking for duplicates in Notion...');
+      const duplicateCheck = await this.checkNotionDuplicate(trade);
+      
+      if (duplicateCheck.isDuplicate) {
+        console.log('Duplicate trade found in Notion, skipping:', trade.id);
+        // 重複は成功として扱う（すでにNotionに存在するため）
+        this.processedTrades.add(trade.id);
+        return { success: true, reason: 'duplicate' };
+      }
+
       const response = await chrome.runtime.sendMessage({
         action: 'sendToNotion',
         trade: trade,
@@ -496,6 +536,7 @@ class TopstepXNotionTrader {
 
       if (response && response.success) {
         console.log('Trade sent to Notion successfully:', trade.symbolName);
+        this.processedTrades.add(trade.id);
         return true;
       } else {
         console.error('Failed to send trade to Notion:', response?.error || 'Unknown error');
@@ -504,6 +545,26 @@ class TopstepXNotionTrader {
     } catch (error) {
       console.error('Error sending trade to Notion:', error);
       return false;
+    }
+  }
+
+  // === 新しいメソッド：Notion重複チェック ===
+  async checkNotionDuplicate(trade) {
+    try {
+      // Background scriptに重複チェックを依頼
+      const response = await chrome.runtime.sendMessage({
+        action: 'checkNotionDuplicate',
+        trade: trade,
+        token: this.settings.notionToken,
+        databaseId: this.settings.databaseId
+      });
+
+      console.log('Duplicate check response:', response);
+      return response || { isDuplicate: false };
+    } catch (error) {
+      console.error('Error checking Notion duplicate:', error);
+      // エラー時は重複なしとして処理を続行
+      return { isDuplicate: false, error: error.message };
     }
   }
 
