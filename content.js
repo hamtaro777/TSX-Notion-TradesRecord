@@ -169,7 +169,7 @@ class TopstepXNotionTrader {
       console.log(`✅ ${currentSync.type} sync completed, releasing mutex`);
 
       // 次のキューを処理
-      setTimeout(() => this.processSyncQueue(), 5000);
+      setTimeout(() => this.processSyncQueue(), 1000);
     }
   }
 
@@ -250,7 +250,7 @@ class TopstepXNotionTrader {
 
       // 過度な負荷を避けるため少し待機
       if (i < tradesToProcess.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 350));
       }
     }
 
@@ -730,7 +730,7 @@ class TopstepXNotionTrader {
       clearTimeout(this.checkTimeout);
       this.checkTimeout = setTimeout(() => {
         this.checkTrades();
-      }, 10000);
+      }, 5000);
     });
 
     const tradesTab = this.findTradesTab();
@@ -812,7 +812,7 @@ class TopstepXNotionTrader {
         // アカウント変更時も排他制御付きで同期
         setTimeout(() => {
           this.executeSync('auto-account-change');
-        }, 5000);
+        }, 1000);
       }
 
       this.lastAccountSelectorText = currentSelectorText;
